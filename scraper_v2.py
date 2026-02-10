@@ -7,9 +7,11 @@ import queue
 HAS_GUI = False
 try:
     import tkinter as tk
-    # We don't import the rest here to avoid side effects in cloud
+    from tkinter import messagebox
+    from tkinter.scrolledtext import ScrolledText
+    import ttkbootstrap as ttk
     HAS_GUI = True
-except ImportError:
+except (ImportError, RuntimeError, Exception):
     HAS_GUI = False
 
 from datetime import datetime
@@ -227,11 +229,6 @@ def process_urls(urls, log_fn=print, json_path="pr_articles_extracted.json"):
 if HAS_GUI:
     class UnifiedScraperApp(ttk.Window):
         def __init__(self):
-            import tkinter as tk
-            from tkinter import messagebox
-            from tkinter.scrolledtext import ScrolledText
-            import ttkbootstrap as ttk
-            
             super().__init__(themename="flatly")
             self.title("MAS ChatBot - Unified Scraper & Ingester")
             self.geometry("800x600")
@@ -347,11 +344,6 @@ def run_gui():
         print("GUI libraries (tkinter/ttkbootstrap) are missing. Cannot start GUI.")
         return
     try:
-        import tkinter as tk
-        from tkinter import messagebox
-        from tkinter.scrolledtext import ScrolledText
-        import ttkbootstrap as ttk
-        
         app = UnifiedScraperApp()
         app.mainloop()
     except Exception as e:
