@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h1>Scrape & Ingest Articles</h1>
+    <p>Efficiently extract content from web sources and update your AI knowledge base.</p>
+</section>
+
+<div class="card shadow">
+    <div class="card-header">
+        <h2>Add URLs to Scrape</h2>
+    </div>
+    <div class="card-body">
+        <div class="input-group">
+            <input type="text" id="url-input" placeholder="https://example.com/article" aria-label="URL to scrape">
+            <button id="add-btn" class="btn btn-primary">Add</button>
+        </div>
+
+        <div class="url-list-container">
+            <ul id="url-list" class="url-list">
+                <!-- URLs will be added here -->
+            </ul>
+        </div>
+
+        <div class="actions">
+            <button id="clear-btn" class="btn btn-outline">Clear All</button>
+            <button id="start-btn" class="btn btn-success">Start Scraping</button>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow status-card" id="status-card" style="display: none;">
+    <div class="card-header">
+        <h2>Status & Logs</h2>
+        <span id="status-badge" class="badge">Idle</span>
+    </div>
+    <div class="card-body">
+        <div class="log-container" id="log-box">
+            <!-- Logs will appear here -->
+        </div>
+    </div>
+</div>
+{% endblock %}

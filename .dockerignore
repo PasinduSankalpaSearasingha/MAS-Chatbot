@@ -1,0 +1,14 @@
+.venv
+__pycache__
+.env
+.git
+.github
+*.docx
+*.json
+!pr_articles_extracted.json
+.pytest_cache
+.vscode
+*.pyc
+*.pyo
+*.pyd
+.db
