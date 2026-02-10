@@ -21,20 +21,15 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Log in to Azure Container Registry
+      - name: Build and push image to ACR
         uses: azure/CLI@v2
         with:
           azcliversion: latest
           inlineScript: |
-            az acr login --name ${{ env.ACR_NAME }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push container image
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/maschatbot:latest -f ./Dockerfile .
-          docker push ${{ env.ACR_NAME }}.azurecr.io/maschatbot:latest
+            az acr build \
+              --registry ${{ env.ACR_NAME }} \
+              --image maschatbot:latest \
+              --file ./Dockerfile .
 
       - name: Deploy to Azure Container Apps
         uses: azure/CLI@v2
