@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.github/workflows/*.yml
+! .github/workflows/main_mas-chatbot.yml
+AZURE_SETUP.md
+*.docx
+*.json
+!pr_articles_extracted.json
+.vscode/
+.idea/
+*.log
