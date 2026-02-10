@@ -30,16 +30,18 @@ jobs:
           tags: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/maschatbot:latest
           file: ./Dockerfile
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Deploy to Azure Container Apps
         uses: azure/CLI@v2
         with:
           azcliversion: latest
           inlineScript: |
-            az login --service-principal \
-              -u ${{ secrets.AZURE_SP_CLIENT_ID }} \
-              -p ${{ secrets.AZURE_SP_CLIENT_SECRET }} \
-              --tenant ${{ secrets.AZURE_SP_TENANT_ID }}
-            az containerapp update \
+            az containerapp up \
               --name maschatbot \
               --resource-group res_no_18 \
+              --location centralindia \
               --image ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/maschatbot:latest
