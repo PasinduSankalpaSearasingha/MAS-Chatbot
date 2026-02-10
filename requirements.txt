@@ -12,3 +12,4 @@ ttkbootstrap>=1.10.1
 fastapi>=0.100.0
 uvicorn>=0.22.0
 pydantic>=2.0.0
+Jinja2>=3.1.0
