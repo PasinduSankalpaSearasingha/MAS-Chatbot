@@ -1,4 +1,4 @@
-name: Build and deploy container app to Azure App Service - mas-chatbot
+name: Build and deploy to Azure Container Apps
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,32 +17,29 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v2
+        uses: docker/login-action@v3
         with:
-          login-server: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}
+          registry: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}
           username: ${{ secrets.AZURE_CONTAINER_REGISTRY_USERNAME }}
           password: ${{ secrets.AZURE_CONTAINER_REGISTRY_PASSWORD }}
 
-      - name: Build and push container image to registry
+      - name: Build and push container image
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/mas-chatbot:${{ github.sha }}
+          tags: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/maschatbot:latest
           file: ./Dockerfile
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: Deploy to Azure Container Apps
-        uses: azure/container-apps-deploy-action@v1
+        uses: azure/CLI@v2
         with:
-          containerAppName: 'mas-chatbot'
-          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          imageToDeploy: ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/mas-chatbot:${{ github.sha }}
+          azcliversion: latest
+          inlineScript: |
+            az login --service-principal \
+              -u ${{ secrets.AZURE_SP_CLIENT_ID }} \
+              -p ${{ secrets.AZURE_SP_CLIENT_SECRET }} \
+              --tenant ${{ secrets.AZURE_SP_TENANT_ID }}
+            az containerapp update \
+              --name maschatbot \
+              --resource-group res_no_18 \
+              --image ${{ secrets.AZURE_CONTAINER_REGISTRY_URL }}/maschatbot:latest
