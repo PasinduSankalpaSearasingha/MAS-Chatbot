@@ -13,6 +13,10 @@ from scraper_v2 import process_urls, extract_article_links
 
 app = FastAPI(title="MAS ChatBot Scraper API")
 
+# Define absolute path for JSON data
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+JSON_PATH = os.path.join(BASE_DIR, "pr_articles_extracted.json")
+
 # Enable CORS for frontend development
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +64,7 @@ def background_scrape(urls: List[str]):
     task_status["logs"].append(f"Starting scraping for {len(urls)} URLs...")
     
     try:
-        process_urls(urls, log_fn=log_to_task)
+        process_urls(urls, log_fn=log_to_task, json_path=JSON_PATH)
         task_status["logs"].append("Scraping and ingestion finished successfully.")
     except Exception as e:
         task_status["logs"].append(f"Critical Error: {str(e)}")

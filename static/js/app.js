@@ -77,16 +77,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function pollStatus() {
+        if (isPolling && !arguments[0]) return; // Prevent multiple concurrent polls unless forced
         isPolling = true;
+
         try {
             const response = await fetch('/api/status');
             const data = await response.json();
 
-            // Update logs
-            logBox.innerHTML = data.logs.join('\n');
-            logBox.scrollTop = logBox.scrollHeight;
+            // Show status card if there are logs or it's running
+            if (data.logs.length > 0 || data.is_running) {
+                statusCard.style.display = 'block';
+            }
+
+            // Update logs - using textContent for security and adding line breaks
+            if (data.logs.length > 0) {
+                logBox.textContent = data.logs.join('\n');
+                logBox.scrollTop = logBox.scrollHeight;
+            }
 
             if (data.is_running) {
+                statusBadge.textContent = 'Running';
+                statusBadge.className = 'badge running';
+                startBtn.disabled = true;
                 setTimeout(pollStatus, 2000);
             } else {
                 statusBadge.textContent = 'Idle';
@@ -96,7 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Polling error:', error);
-            setTimeout(pollStatus, 5000); // Retry later
+            isPolling = false;
+            setTimeout(() => pollStatus(true), 5000); // Retry with force flag
         }
     }
 

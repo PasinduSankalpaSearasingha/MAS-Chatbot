@@ -3,16 +3,7 @@ import json
 import requests
 import threading
 import queue
-# GUI presence flag
-HAS_GUI = False
-try:
-    import tkinter as tk
-    from tkinter import messagebox
-    from tkinter.scrolledtext import ScrolledText
-    import ttkbootstrap as ttk
-    HAS_GUI = True
-except (ImportError, RuntimeError, Exception):
-    HAS_GUI = False
+
 
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -49,8 +40,24 @@ def _load_json_data(json_path):
 
 def _save_json_data(json_path, data):
     """Saves the main data store to JSON."""
-    with open(json_path, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
+    try:
+        abs_path = os.path.abspath(json_path)
+        temp_path = abs_path + ".tmp"
+        
+        # Write to temp file first
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+            
+        # Atomic replace
+        if os.path.exists(abs_path):
+            os.remove(abs_path)
+        os.rename(temp_path, abs_path)
+        
+    except Exception as e:
+        print(f"DEBUG: Failed to save JSON: {e}")
+        raise e
 
 # --- Scraping Logic ---
 
@@ -192,7 +199,13 @@ def process_urls(urls, log_fn=print, json_path="pr_articles_extracted.json"):
     """
     Core workflow: Scrape -> Save to JSON -> Ingest to Astra DB.
     """
+    abs_json_path = os.path.abspath(json_path)
+    log_fn(f"Processing using JSON file at: {abs_json_path}")
+
     data_store = _load_json_data(json_path)
+    initial_count = len(data_store.get("articles", []))
+    log_fn(f"Initial articles in DB: {initial_count}")
+
     # Normalize URLs for duplicate checking (strip http/https and trailing slashes)
     def normalize(u):
         return u.replace("https://", "").replace("http://", "").rstrip("/")
@@ -204,151 +217,31 @@ def process_urls(urls, log_fn=print, json_path="pr_articles_extracted.json"):
     for url in urls:
         norm_url = normalize(url)
         if norm_url in existing_normalized:
-            log_fn(f"Skipping cached URL: {url}")
+            log_fn(f"SKIPPING DUPLICATE: {url}")
             continue
             
-        log_fn(f"Scraping: {url}")
+        log_fn(f"SCRAPING: {url}")
         content = scrape_article_content(url)
         if content:
+            # Append locally
             data_store["articles"].append(content)
             new_articles.append(content)
-            # Save JSON after each successful scrape to prevent data loss
-            _save_json_data(json_path, data_store)
-            log_fn(f"Saved to JSON: {content['title']}")
             existing_normalized.add(norm_url)
+            
+            # Persist immediately
+            try:
+                _save_json_data(json_path, data_store)
+                log_fn(f"SUCCESS: Saved article '{content['title']}' to JSON.")
+                log_fn(f"STATS: Total articles now: {len(data_store['articles'])}")
+            except Exception as e:
+                log_fn(f"ERROR: Could not save to JSON file: {e}")
         else:
-            log_fn(f"Failed to extract content from: {url}")
+            log_fn(f"FAILURE: Could not extract content from: {url}")
             
     if new_articles:
         ingest_data_to_astra(new_articles, log_fn=log_fn)
     else:
-        log_fn("No new content found to upload.")
-
-# --- GUI Application (Optional) ---
-
-if HAS_GUI:
-    class UnifiedScraperApp(ttk.Window):
-        def __init__(self):
-            super().__init__(themename="flatly")
-            self.title("MAS ChatBot - Unified Scraper & Ingester")
-            self.geometry("800x600")
-            
-            self.log_queue = queue.Queue()
-            self.url_var = tk.StringVar()
-            
-            self._build_ui()
-            self._poll_log_queue()
-
-        def _build_ui(self):
-            container = ttk.Frame(self, padding=20)
-            container.pack(fill=tk.BOTH, expand=True)
-
-            header = ttk.Label(container, text="Scrape & Ingest Articles", font=("Segoe UI", 18, "bold"))
-            header.pack(anchor=tk.W, pady=(0, 10))
-
-            # Input Area
-            input_frame = ttk.LabelFrame(container, text=" Add URLs ")
-            input_frame.pack(fill=tk.X, pady=(0, 10))
-
-            entry_row = ttk.Frame(input_frame)
-            entry_row.pack(fill=tk.X)
-
-            self.entry = ttk.Entry(entry_row, textvariable=self.url_var)
-            self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-            self.entry.bind("<Return>", lambda e: self._add_url())
-
-            add_btn = ttk.Button(entry_row, text="Add", command=self._add_url, bootstyle="primary", width=10)
-            add_btn.pack(side=tk.LEFT, padx=(10, 0))
-
-            # List Area
-            list_frame = ttk.Frame(container)
-            list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-            self.url_list = tk.Listbox(list_frame, height=8)
-            self.url_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-            sb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.url_list.yview)
-            sb.pack(side=tk.RIGHT, fill=tk.Y)
-            self.url_list.config(yscrollcommand=sb.set)
-
-            # Actions
-            action_row = ttk.Frame(container)
-            action_row.pack(fill=tk.X, pady=(0, 10))
-
-            ttk.Button(action_row, text="Remove Selected", command=self._remove_url, bootstyle="secondary").pack(side=tk.LEFT)
-            ttk.Button(action_row, text="Clear All", command=lambda: self.url_list.delete(0, tk.END), bootstyle="secondary-outline").pack(side=tk.LEFT, padx=10)
-            
-            self.start_btn = ttk.Button(action_row, text="Start Process", command=self._start_work, bootstyle="success")
-            self.start_btn.pack(side=tk.RIGHT)
-
-            # Activity Log
-            ttk.Label(container, text="Activity Log:").pack(anchor=tk.W)
-            self.log_box = ScrolledText(container, height=10, state=tk.DISABLED)
-            self.log_box.pack(fill=tk.BOTH, expand=True)
-
-        def _add_url(self):
-            url = self.url_var.get().strip()
-            if url and (url.startswith("http") or url.startswith("https")):
-                self.url_list.insert(tk.END, url)
-                self.url_var.set("")
-            elif url:
-                messagebox.showwarning("Invalid URL", "Please enter a valid URL.")
-
-        def _remove_url(self):
-            for idx in reversed(self.url_list.curselection()):
-                self.url_list.delete(idx)
-
-        def _start_work(self):
-            urls = list(self.url_list.get(0, tk.END))
-            if not urls:
-                messagebox.showinfo("Empty List", "Please add at least one URL.")
-                return
-                
-            self.start_btn.config(state=tk.DISABLED)
-            threading.Thread(target=self._run_logic, args=(urls,), daemon=True).start()
-
-        def _run_logic(self, urls):
-            try:
-                self._enqueue_log("--- Starting Unified Workflow ---")
-                process_urls(urls, log_fn=self._enqueue_log)
-                self._enqueue_log("--- Process Completed ---")
-            except Exception as e:
-                self._enqueue_log(f"Process Error: {e}")
-            finally:
-                self.log_queue.put("__DONE__")
-
-        def _enqueue_log(self, text):
-            self.log_queue.put(text)
-
-        def _poll_log_queue(self):
-            while not self.log_queue.empty():
-                msg = self.log_queue.get()
-                if msg == "__DONE__":
-                    self.start_btn.config(state=tk.NORMAL)
-                else:
-                    self.log_box.config(state=tk.NORMAL)
-                    self.log_box.insert(tk.END, f"{msg}\n")
-                    self.log_box.see(tk.END)
-                    self.log_box.config(state=tk.DISABLED)
-            self.after(100, self._poll_log_queue)
-else:
-    # Minimal stub if GUI not available
-    class UnifiedScraperApp:
-        def __init__(self):
-            print("GUI is not available in this environment.")
-
-# --- Execution Entry Point ---
-
-def run_gui():
-    if not HAS_GUI:
-        print("GUI libraries (tkinter/ttkbootstrap) are missing. Cannot start GUI.")
-        return
-    try:
-        app = UnifiedScraperApp()
-        app.mainloop()
-    except Exception as e:
-        print(f"Failed to start GUI: {e}")
-        print("Falling back to CLI/Headless mode.")
+        log_fn("INFO: No new articles were scraped.")
 
 if __name__ == "__main__":
     import sys
@@ -356,7 +249,7 @@ if __name__ == "__main__":
         # CLI Mode
         start_url = sys.argv[1]
         if "island.lk" in start_url and "?s=" in start_url:
-            # Paginated mode for Search/Listings
+            # Paginated extraction
             print(f"Paginated extraction started for: {start_url}")
             links, next_link = extract_article_links(start_url)
             print(f"Found {len(links)} links. Next page: {next_link}")
@@ -374,5 +267,4 @@ if __name__ == "__main__":
             # Single URL or manual list
             process_urls(sys.argv[1:])
     else:
-        # GUI Mode
-        run_gui()
+        print("Usage: python scraper_v2.py <url> OR run server.py for Web UI")

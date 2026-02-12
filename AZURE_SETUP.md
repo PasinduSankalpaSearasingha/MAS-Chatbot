@@ -1,41 +1,45 @@
-# Azure Hosting Setup Guide
+# Azure Hosting Setup Guide (Azure Container Apps)
 
-This guide explains how to set up the MAS ChatBot on Azure App Service as a containerized app with GitHub Actions.
+This guide explains how to host your MAS ChatBot on **Azure Container Apps** with automatic deployment from GitHub.
 
-## 1. Azure Resources Required
+## 1. Important: Use Azure Cloud Shell
+You don't need to install anything on your computer. 
+1. Log in to the [Azure Portal](https://portal.azure.com).
+2. Click the **Cloud Shell** icon (`>_`) at the top right of the screen (next to the search bar).
+3. If asked, choose **Bash**.
 
-1.  **Azure Container Registry (ACR)**: To store your Docker images.
-    - Create an ACR in the Azure Portal.
-    - Enable "Admin user" in the ACR Access Keys settings.
-2.  **Azure App Service**: To host the application.
-    - Create a "Web App for Containers".
-    - Choose "Linux" as the OS.
-    - Under "Docker", you can initially set a placeholder image or leave it for the CI/CD to handle.
+## 2. Finding your IDs
+- **Subscription ID**: 
+  - In the portal search bar, type **Subscriptions**.
+  - Click your subscription. The ID is a long string (e.g., `48a2ab83-e9ec-4ff5-...`).
+- **Resource Group**: 
+  - In the portal search bar, type **Resource groups**.
+  - Use the name of the group where you created your Container App (e.g., `mas-chatbot-rg`).
 
-## 2. GitHub Secrets
+## 3. Create the Credentials (Fixes Authorization Errors)
+Run this command in the **Azure Cloud Shell** (NOT your local terminal). This gives GitHub permission to manage your app.
 
-Go to your GitHub Repository -> Settings -> Secrets and variables -> Actions and add the following secrets:
+```bash
+az ad sp create-for-rbac --name "maschatbot-github-deploy" --role contributor --scopes /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/<RESOURCE_GROUP_NAME> --sdk-auth
+```
+- Replace `<SUBSCRIPTION_ID>` with your ID.
+- Replace `<RESOURCE_GROUP_NAME>` with your group name (e.g., `mas-chatbot-rg`).
 
-| Secret Name | Description |
+**Copy the entire JSON output** (including the `{` and `}`) and paste it into the `AZURE_CREDENTIALS` secret in GitHub.
+
+## 4. GitHub Secrets Checklist
+Ensure these are exactly right in **GitHub Repository** -> **Settings** -> **Secrets** -> **Actions**:
+
+| Secret Name | Example Value |
 | :--- | :--- |
-| `AZURE_CONTAINER_REGISTRY_URL` | The login server of your ACR (e.g., `myregistry.azurecr.io`). |
-| `AZURE_CONTAINER_REGISTRY_USERNAME` | The admin username for your ACR. |
-| `AZURE_CONTAINER_REGISTRY_PASSWORD` | The admin password for your ACR. |
-| `AZURE_WEBAPP_PUBLISH_PROFILE` | The Publish Profile content from your Azure Web App (Download from Azure Portal). |
+| `AZURE_CREDENTIALS` | `{ "clientId": "...", ... }` (The full JSON) |
+| `AZURE_RESOURCE_GROUP` | `mas-chatbot-rg` |
+| `AZURE_CONTAINER_REGISTRY_NAME` | `maschatbot` (just the name) |
+| `AZURE_CONTAINER_REGISTRY_URL` | `maschatbot.azurecr.io` |
+| `AZURE_CONTAINER_REGISTRY_USERNAME` | `maschatbot` |
+| `AZURE_CONTAINER_REGISTRY_PASSWORD` | `(your_acr_password)` |
 
-## 3. Environment Variables (Azure)
-
-In the Azure Portal, go to your App Service -> Configuration -> Application settings and add your `.env` variables there:
-
-- `OPENAI_API_KEY`
-- `ASTRA_DB_APPLICATION_TOKEN`
-- `ASTRA_DB_API_ENDPOINT`
-- ... (any other keys from your current `.env` file)
-- **CRITICAL**: Add `WEBSITES_PORT` and set it to `8000`.
-
-## 4. Deployment
-
-Once the secrets are set, push your changes to the `main` branch. The GitHub Action will automatically:
-1. Build the Docker image.
-2. Push it to ACR.
-3. Deploy it to the App Service.
+## 5. Troubleshooting "AuthorizationFailed"
+If you still see "does not have authorization", it means the Service Principal was created for the wrong "Scope". 
+- Delete the old secret in GitHub.
+- Run the command in Step 3 again, making triple-sure the `SUBSCRIPTION_ID` and `RESOURCE_GROUP_NAME` match exactly what is in your portal.
